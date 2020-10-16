@@ -31,7 +31,7 @@ schedule.scheduleJob('*/2 * * * *', async () => { // run every 2 minutes
 				cid: client.cid,
 				name: client.realname,
 				rating: client.rating,
-				position: client.callsign,
+				pos: client.callsign,
 				timeStart: client.time_logon,
 				atis: client.atis_message,
 				frequency: client.frequency
