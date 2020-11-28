@@ -26,7 +26,7 @@ schedule.scheduleJob('*/2 * * * *', async () => { // run every 2 minutes
 	const data = await res.json();
 	
 	for(const client of data.clients) {
-		if(client.clienttype === "ATC" && atcPos.includes(client.callsign.slice(0, 3))) {
+		if(client.clienttype === "ATC" && atcPos.includes(client.callsign.slice(0, 3)) && client.callsign !== "PRC_FSS") {
 			await AtcOnline.create({
 				cid: client.cid,
 				name: client.realname,
@@ -59,7 +59,7 @@ schedule.scheduleJob('*/2 * * * *', async () => { // run every 2 minutes
 				cid: client.cid,
 				name: client.realname,
 				callsign: client.callsign,
-				aircraft: client.planned_aircraft,
+				aircraft: client.planned_aircraft.substring(0, 8),
 				dep: client.planned_depairport,
 				dest: client.planned_destairport,
 				lat: client.latitude,
