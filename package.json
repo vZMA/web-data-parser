@@ -7,10 +7,10 @@
   "author": "Austin Robison",
   "license": "CC BY-NC-SA 4.0",
   "dependencies": {
+    "axios": "^0.21.0",
     "dotenv": "^8.2.0",
     "moment": "^2.27.0",
-    "mongoose": "^5.9.27",
-    "node-fetch": "^2.6.0",
+    "mongoose": "^5.11.8",
     "node-schedule": "^1.3.2"
   },
   "devDependencies": {}

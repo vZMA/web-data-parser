@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import fetch from 'node-fetch';
+import axios from 'axios';
 import dotenv from 'dotenv'
 import schedule from 'node-schedule';
 import moment from 'moment';
@@ -22,52 +22,59 @@ schedule.scheduleJob('*/2 * * * *', async () => { // run every 2 minutes
 	await PilotOnline.deleteMany({}).exec();
 	console.log("Fetching data from VATISM.")
 	
-	const res = await fetch('http://cluster.data.vatsim.net/vatsim-data.json');
-	const data = await res.json();
-	
-	for(const client of data.clients) {
-		if(client.clienttype === "ATC" && atcPos.includes(client.callsign.slice(0, 3)) && client.callsign !== "PRC_FSS") {
+	const {data} = await axios.get('https://data.vatsim.net/v3/vatsim-data.json');
+
+	for(const pilot of data.pilots) {
+		if(pilot.flight_plan !== null && (airports.includes(pilot.flight_plan.departure) || airports.includes(pilot.flight_plan.arrival))) {
+			await PilotOnline.create({
+				cid: pilot.cid,
+				name: pilot.name,
+				callsign: pilot.callsign,
+				aircraft: pilot.flight_plan.aircraft.substring(0, 8),
+				dep: pilot.flight_plan.departure,
+				dest: pilot.flight_plan.arrival,
+				lat: pilot.latitude,
+				lng: pilot.longitude,
+				altitude: pilot.altitude,
+				heading: pilot.heading,
+				speed: pilot.groundspeed,
+				planned_cruise: pilot.flight_plan.altitude,
+				route: pilot.flight_plan.route,
+				remarks: pilot.flight_plan.remarks
+			});
+		}
+	};
+
+	for(const controller of data.controllers) {
+		if(atcPos.includes(controller.callsign.slice(0, 3)) && controller.callsign !== "PRC_FSS") {
 			await AtcOnline.create({
-				cid: client.cid,
-				name: client.realname,
-				rating: client.rating,
-				pos: client.callsign,
-				timeStart: client.time_logon,
-				atis: client.atis_message,
-				frequency: client.frequency
+				cid: controller.cid,
+				name: controller.name,
+				rating: controller.rating,
+				pos: controller.callsign,
+				timeStart: controller.logon_time,
+				atis: controller.text_atis.join(' - '),
+				frequency: controller.frequency
 			})
 	
 			const session = await ControllerHours.findOne({
-				cid: client.cid,
-				timeStart: client.time_logon
+				cid: controller.cid,
+				timeStart: controller.logon_time
 			})
 	
 			if(!session) {
 				await ControllerHours.create({
-					cid: client.cid,
-					timeStart: client.time_logon,
+					cid: controller.cid,
+					timeStart: controller.logon_time,
 					timeEnd: moment().utc(),
-					position: client.callsign
+					position: controller.callsign
 				})
 			} else {
 				session.timeEnd = moment().utc();
 				await session.save();
 			}
 		}
-		if(client.clienttype === "PILOT" && (airports.includes(client.planned_depairport) || airports.includes(client.planned_destairport))) {
-			await PilotOnline.create({
-				cid: client.cid,
-				name: client.realname,
-				callsign: client.callsign,
-				aircraft: client.planned_aircraft.substring(0, 8),
-				dep: client.planned_depairport,
-				dest: client.planned_destairport,
-				lat: client.latitude,
-				lng: client.longitude,
-				heading: client.heading,
-				route: client.planned_route,
-				remarks: client.planned_remarks
-			})
-		}
-	}
-})
+	};
+
+
+});

@@ -8,8 +8,11 @@ const pilotOnlineSchema = new m.Schema({
     dep: String,
     dest: String,
     lat: Number,
-    lng: Number,
-    heading: Number,
+	lng: Number,
+	altitude: Number,
+	heading: Number,
+	speed: Number,
+	planned_cruise: Number,
     route: String,
     remarks: String
 }, {
