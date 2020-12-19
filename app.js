@@ -53,7 +53,7 @@ schedule.scheduleJob('*/2 * * * *', async () => { // run every 2 minutes
 				rating: controller.rating,
 				pos: controller.callsign,
 				timeStart: controller.logon_time,
-				atis: controller.text_atis.join(' - '),
+				atis: controller.text_atis ? controller.text_atis.join(' - ') : '',
 				frequency: controller.frequency
 			})
 	
