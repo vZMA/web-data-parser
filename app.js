@@ -27,7 +27,9 @@ schedule.scheduleJob('*/2 * * * *', async () => { // run every 2 minutes
 	await AtcOnline.deleteMany({}).exec();
 	await PilotOnline.deleteMany({}).exec();
 	await AtisOnline.deleteMany({}).exec();
-	await Pireps.deleteMany({}).exec();
+	let twoHours = new Date();
+	twoHours = new Date(twoHours.setHours(twoHours.getHours() - 2));
+	await Pireps.deleteMany({$or: [{manual: false}, {reportTime: {$lte: twoHours}}]}).exec();
 	console.log("Fetching data from VATISM.")
 	
 	const {data} = await axios.get('https://data.vatsim.net/v3/vatsim-data.json');
@@ -108,39 +110,46 @@ schedule.scheduleJob('*/2 * * * *', async () => { // run every 2 minutes
 
 	const pirepsXml = await axios.get('https://www.aviationweather.gov/adds/dataserver_current/httpparam?dataSource=aircraftreports&requestType=retrieve&format=xml&minLat=30&minLon=-113&maxLat=37&maxLon=-100&hoursBeforeNow=2');
 	const pirepsJson = JSON.parse(convert.xml2json(pirepsXml.data, {compact: true, spaces: 4}));
-	if(pirepsJson.response.data.AircraftReport.isArray !== true) {
+	if(pirepsJson.response.data.AircraftReport && pirepsJson.response.data.AircraftReport.isArray !== true) {
 		const pirep = pirepsJson.response.data.AircraftReport;
 		if(pirep.report_type._text === 'PIREP') {
+			const windDir = pirep.wind_dir_degrees ? pirep.wind_dir_degrees._text : '';
+			const windSpd =  pirep.wind_speed_kt ? pirep.wind_speed_kt._text : '';
+			const wind = `${windDir}@${windSpd}`;
+			const altitude = pirep.altitude_ft_msl ? ((pirep.altitude_ft_msl._text).slice(0, -2).length > 2 ? (pirep.altitude_ft_msl._text).slice(0, -2) : ('0' + pirep.altitude_ft_msl._text).slice(0, -2)) : '';
 			await Pireps.create({
 				reportTime: pirep.observation_time._text,
 				aircraft: pirep.aircraft_ref._text,
-				flightLevel: pirep.altitude_ft_msl._text,
-				skyCond: pirep.sky_condition ? `${pirep.sky_condition._attributes.sky_cover} ${pirep.sky_condition._attributes.cloud_base_ft_msl}-${pirep.sky_condition._attributes.cloud_top_ft_msl}` : '',
+				flightLevel: altitude,
+				skyCond: pirep.sky_condition ? `${pirep.sky_condition._attributes.sky_cover} ${pirep.sky_condition._attributes.cloud_base_ft_msl ? pirep.sky_condition._attributes.cloud_base_ft_msl : ''}${pirep.sky_condition._attributes.cloud_top_ft_msl ? '- ' + pirep.sky_condition._attributes.cloud_top_ft_msl : ''}` : '',
 				turbulence: pirep.turbulence_condition ? pirep.turbulence_condition._attributes.turbulence_intensity : '',
 				icing: pirep.icing_condition ? `${pirep.icing_condition._attributes.icing_intensity.slice(0,3)} ${('0' + pirep.icing_condition._attributes.icing_base_ft_msl).slice(0,-2)}${pirep.icing_condition._attributes.icing_top_ft_msl ? '-' + pirep.icing_condition._attributes.icing_top_ft_msl : ''}` : '',
 				vis: pirep.visibility_statute_mi ? pirep.visibility_statute_mi._text : '',
 				temp: pirep.temp_c ? pirep.temp_c._text : '',
-				windDir: pirep.wind_dir_degrees ? pirep.wind_dir_degrees._text : '',
-				windSpd: pirep.wind_speed_kt ? pirep.wind_speed_kt._text : '',
+				wind: wind,
 				urgent: pirep.report_type._text === 'Urgent PIREP' ? true : false,
 				raw: pirep.raw_text._text,
 				manual: false
 			});
 		}
-	} else {
-		for(const pirep of pirepsJson.response.data.AircraftReport) {
+	} else if(pirepsJson.response.data.AircraftReport && pirepsJson.response.data.AircraftReport) {
+		for(const pirep of pirepsJson.response.data.AircraftReport.isArray === true) {
 			if(pirep.report_type._text === 'PIREP') {
+				const windDir = pirep.wind_dir_degrees ? pirep.wind_dir_degrees._text : '';
+				const windSpd =  pirep.wind_speed_kt ? pirep.wind_speed_kt._text : '';
+				const wind = `${windDir}@${windSpd}`;
+				const altitude = pirep.altitude_ft_msl ? ((pirep.altitude_ft_msl._text).slice(0, -2).length > 2 ? (pirep.altitude_ft_msl._text).slice(0, -2) : ('0' + pirep.altitude_ft_msl._text).slice(0, -2)) : '';
+
 				await Pireps.create({
 					reportTime: pirep.observation_time._text,
 					aircraft: pirep.aircraft_ref._text,
-					flightLevel: pirep.altitude_ft_msl._text,
+					flightLevel: altitude,
 					skyCond: pirep.sky_condition ? `${pirep.sky_condition._attributes.sky_cover} ${pirep.sky_condition._attributes.cloud_base_ft_msl}-${pirep.sky_condition._attributes.cloud_top_ft_msl}` : '',
 					turbulence: pirep.turbulence_condition ? pirep.turbulence_condition._attributes.turbulence_intensity : '',
 					icing: pirep.icing_condition ? `${pirep.icing_condition._attributes.icing_intensity.slice(0,3)} ${pirep.icing_condition._attributes.icing_base_ft_msl.slice(-2)}-${pirep.icing_condition._attributes.icing_top_ft_msl}` : '',
 					vis: pirep.visibility_statute_mi ? pirep.visibility_statute_mi._text : '',
 					temp: pirep.temp_c ? pirep.temp_c._text : '',
-					windDir: pirep.wind_dir_degrees ? pirep.wind_dir_degrees._text : '',
-					windSpd: pirep.wind_speed_kt ? pirep.wind_speed_kt._text : '',
+					wind: wind,
 					urgent: pirep.report_type._text === 'Urgent PIREP' ? true : false,
 					raw: pirep.raw_text._text,
 					manual: false
