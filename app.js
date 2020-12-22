@@ -137,7 +137,7 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useCreateIndex:
 const db = mongoose.connection;
 db.once('open', () => console.log('Successfully connected to MongoDB'));
 
-//schedule.scheduleJob('* * * * *', async () => { // run every 2 minutes
+schedule.scheduleJob('* * * * *', async () => { // run every 2 minutes
 	await AtcOnline.deleteMany({}).exec();
 	await PilotOnline.deleteMany({}).exec();
 	await AtisOnline.deleteMany({}).exec();
@@ -291,6 +291,6 @@ db.once('open', () => console.log('Successfully connected to MongoDB'));
 		}
 	}
 
-//});
+});
 
 //https://www.aviationweather.gov/adds/dataserver_current/httpparam?dataSource=aircraftreports&requestType=retrieve&format=xml&minLat=30&minLon=-113&maxLat=37&maxLon=-100&hoursBeforeNow=2
