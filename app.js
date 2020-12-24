@@ -163,7 +163,7 @@ schedule.scheduleJob('* * * * *', async () => { // run every 2 minutes
 				altitude: pilot.altitude,
 				heading: pilot.heading,
 				speed: pilot.groundspeed,
-				planned_cruise: pilot.flight_plan.altitude,
+				planned_cruise: pilot.flight_plan.altitude.includes("FL") ? (pilot.flight_plan.altitude.replace("FL", "") + '00') : pilot.flihgt_plan.altitude, // If flight plan altitude is 'FL350' instead of '35000'
 				route: pilot.flight_plan.route,
 				remarks: pilot.flight_plan.remarks
 			});
@@ -181,7 +181,7 @@ schedule.scheduleJob('* * * * *', async () => { // run every 2 minutes
 				altitude: pilot.altitude,
 				heading: pilot.heading,
 				speed: pilot.groundspeed,
-				planned_cruise: pilot.flight_plan.altitude,
+				planned_cruise: pilot.flight_plan.altitude.includes("FL") ? (pilot.flight_plan.altitude.replace("FL", "") + '00') : pilot.flihgt_plan.altitude, // If flight plan altitude is 'FL350' instead of '35000'
 				route: pilot.flight_plan.route,
 				remarks: pilot.flight_plan.remarks
 			});
