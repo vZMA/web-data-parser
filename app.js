@@ -4,6 +4,8 @@ import dotenv from 'dotenv'
 import schedule from 'node-schedule';
 import convert from 'xml-js';
 import moment from 'moment';
+import Redis from 'ioredis';
+import {Kafka} from 'kafkajs';
 import AtcOnline from './models/AtcOnline.js';
 import AtisOnline from './models/AtisOnline.js';
 import PilotOnline from './models/PilotOnline.js';
@@ -12,18 +14,59 @@ import ControllerHours from './models/ControllerHours.js';
 
 mongoose.set('useFindAndModify', false);
 
-
 dotenv.config();
+
+const redis = new Redis(process.env.REDIS_URI);
+
+const kafka = new Kafka({
+	clientId: 'albuquerque-artcc',
+	brokers: [process.env.VATSIM_KAFKA_FEED],
+	sasl: {
+		mechanism: "plain",
+		username: process.env.VATSIM_KAFKA_USERNAME,
+		password: process.env.VATSIM_KAFKA_PASSWORD,
+	}
+})
 
 const atcPos = ["PHX", "ABQ", "TUS", "AMA", "ROW", "ELP", "SDL", "CHD", "FFZ", "IWA", "DVT", "GEU", "GYR", "LUF", "RYN", "DMA", "FLG", "PRC", "AEG", "BIF", "HMN", "SAF", "FHU"];
 const airports = ["KPHX", "KABQ", "KTUS", "KAMA", "KROW", "KELP", "KSDL", "KCHD", "KFFZ", "KIWA", "KDVT", "KGEU", "KGYR", "KLUF", "KRYN", "KDMA", "KFLG", "KPRC", "KAEG", "KBIF", "KHMN", "KSAF", "KFHU"];
+
 
 mongoose.set('toJSON', {virtuals: true});
 mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useCreateIndex: true, useUnifiedTopology: true });
 const db = mongoose.connection;
 db.once('open', () => console.log('Successfully connected to MongoDB'));
 
-schedule.scheduleJob('*/2 * * * *', async () => { // run every 2 minutes
+const startKafka = async () => {
+	const consumer = kafka.consumer({
+		groupId: `albuquerque-artcc${Math.round(Math.random()*100)}`
+	});
+	await consumer.connect();
+	await consumer.subscribe({
+		topic: 'datafeed-v1'
+	});
+
+	await consumer.run({
+		eachMessage: async ({ message }) => {
+			const pilots = (await redis.get('pilots')).split('|');
+			const msg = JSON.parse(message.value.toString());
+			if(msg['$type'].match(/PilotDataDto/) && pilots.includes(msg.callsign)) {
+				// console.log(msg)
+				redis.hmset(`PILOT:${msg.callsign}`,
+					'callsign', msg.callsign,
+					'lat',  `${msg.latitude}`,
+					'lng',  `${msg.longitude}`,
+					'speed', `${msg.ground_speed}`,
+					'heading', `${msg.heading}`,
+					'altitude', `${msg.altitude}`,
+				);
+				redis.publish('PILOT:UPDATE', msg.callsign)
+			}
+		},
+	})
+}
+
+const pollVatsim = async () => {
 	await AtcOnline.deleteMany({}).exec();
 	await PilotOnline.deleteMany({}).exec();
 	await AtisOnline.deleteMany({}).exec();
@@ -33,6 +76,7 @@ schedule.scheduleJob('*/2 * * * *', async () => { // run every 2 minutes
 	console.log("Fetching data from VATISM.")
 	
 	const {data} = await axios.get('https://data.vatsim.net/v3/vatsim-data.json');
+	const pilots = [];
 
 	for(const pilot of data.pilots) { // Get all pilots that depart/arrive in ARTCC's airspace
 		if(pilot.flight_plan !== null && (airports.includes(pilot.flight_plan.departure) || airports.includes(pilot.flight_plan.arrival))) {
@@ -52,8 +96,14 @@ schedule.scheduleJob('*/2 * * * *', async () => { // run every 2 minutes
 				route: pilot.flight_plan.route,
 				remarks: pilot.flight_plan.remarks
 			});
+			pilots.push(pilot.callsign);
+			redis.hset(`PILOT:${pilot.callsign}`,  'cruise', pilot.flight_plan.altitude);
+			redis.hset(`PILOT:${pilot.callsign}`,  'dest', pilot.flight_plan.arrival);
 		}
 	};
+
+	redis.set('pilots', pilots.join('|'));
+	redis.expire(`pilots`, 65);
 
 	for(const controller of data.controllers) { // Get all controllers that are online in ARTCC's airspace
 		if(atcPos.includes(controller.callsign.slice(0, 3)) && controller.callsign !== "PRC_FSS") {
@@ -95,24 +145,39 @@ schedule.scheduleJob('*/2 * * * *', async () => { // run every 2 minutes
 			airport: metar.slice(0,4),
 			metar: metar
 		});
+		redis.set(`METAR:${metar.slice(0,4)}`, metar);
 	}
 
 	for(const atis of data.atis) { // Find all ATIS connections within ARTCC's airspace
 		if(airports.includes(atis.callsign.slice(0,4))) {
-			 await AtisOnline.findOneAndUpdate({airport: atis.callsign.slice(0,4)}, {
+			const airport = `${atis.callsign.slice(0,4)}`
+			await AtisOnline.findOneAndUpdate({airport}, {
 				cid: atis.cid,
 				callsign: atis.callsign,
 				code: atis.atis_code,
 				text:  atis.text_atis ? atis.text_atis.join(' - ') : '',
 			});
+			redis.hmset(`ATIS:${airport}`, 
+				'cid',  atis.cid,
+				'callsign', atis.callsign,
+				'code', atis.atis_code,
+				'text', atis.text_atis ? atis.text_atis.join(' ') : '',
+				'update', `${Date.now()}`,
+			)
+			redis.expire(`ATIS:${airport}`, 65);
 		}
 	}
 
+	redis.publish('METAR:UPDATE', 'UPDATE');
+	redis.publish('ATIS:UPDATE', 'UPDATE');
+}
+
+const getPireps = async () => {
 	const pirepsXml = await axios.get('https://www.aviationweather.gov/adds/dataserver_current/httpparam?dataSource=aircraftreports&requestType=retrieve&format=xml&minLat=30&minLon=-113&maxLat=37&maxLon=-100&hoursBeforeNow=2');
 	const pirepsJson = JSON.parse(convert.xml2json(pirepsXml.data, {compact: true, spaces: 4}));
 	if(pirepsJson.response.data.AircraftReport && pirepsJson.response.data.AircraftReport.isArray !== true) {
 		const pirep = pirepsJson.response.data.AircraftReport;
-		if(pirep.report_type._text === 'PIREP') {
+		if(pirep.report_type && pirep.report_type._text === 'PIREP') {
 			const windDir = pirep.wind_dir_degrees ? pirep.wind_dir_degrees._text : '';
 			const windSpd =  pirep.wind_speed_kt ? pirep.wind_speed_kt._text : '';
 			const wind = `${windDir}@${windSpd}`;
@@ -157,7 +222,20 @@ schedule.scheduleJob('*/2 * * * *', async () => { // run every 2 minutes
 			}
 		}
 	}
+}
 
-});
+
+(async () =>{
+	redis.set('airports', airports.join('|'));
+	await pollVatsim();
+	await startKafka();
+	await getPireps();
+	schedule.scheduleJob('* * * * *', pollVatsim) // run every minute
+	schedule.scheduleJob('*/2 * * * *', getPireps) // run every 2 minutes
+})();
+
+	
+
+	
 
 //https://www.aviationweather.gov/adds/dataserver_current/httpparam?dataSource=aircraftreports&requestType=retrieve&format=xml&minLat=30&minLon=-113&maxLat=37&maxLon=-100&hoursBeforeNow=2
