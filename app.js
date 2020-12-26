@@ -51,7 +51,6 @@ const startKafka = async () => {
 			const pilots = (await redis.get('pilots')).split('|');
 			const msg = JSON.parse(message.value.toString());
 			if(msg['$type'].match(/PilotDataDto/) && pilots.includes(msg.callsign)) {
-				// console.log(msg)
 				redis.hmset(`PILOT:${msg.callsign}`,
 					'callsign', msg.callsign,
 					'lat',  `${msg.latitude}`,
@@ -61,6 +60,10 @@ const startKafka = async () => {
 					'altitude', `${msg.altitude}`,
 				);
 				redis.publish('PILOT:UPDATE', msg.callsign)
+			}
+			if(msg['$type'].match(/RemoveClientDto/) && pilots.includes(msg.callsign)) {
+				redis.del(`PILOT:${msg.callsign}`);
+				redis.publish('PILOT:DELETE', msg.callsign)
 			}
 		},
 	})
