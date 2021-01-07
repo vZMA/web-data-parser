@@ -19,6 +19,7 @@ const redis = new Redis(process.env.REDIS_URI);
 
 const atcPos = ["PHX", "ABQ", "TUS", "AMA", "ROW", "ELP", "SDL", "CHD", "FFZ", "IWA", "DVT", "GEU", "GYR", "LUF", "RYN", "DMA", "FLG", "PRC", "AEG", "BIF", "HMN", "SAF", "FHU"];
 const airports = ["KPHX", "KABQ", "KTUS", "KAMA", "KROW", "KELP", "KSDL", "KCHD", "KFFZ", "KIWA", "KDVT", "KGEU", "KGYR", "KLUF", "KRYN", "KDMA", "KFLG", "KPRC", "KAEG", "KBIF", "KHMN", "KSAF", "KFHU"];
+const neighbors = ['LAX', 'DEN', 'KC', 'FTW', 'HOU', 'MMTY', 'MMTZ'];
 
 
 mongoose.set('toJSON', {virtuals: true});
@@ -34,12 +35,14 @@ const pollVatsim = async () => {
 	twoHours = new Date(twoHours.setHours(twoHours.getHours() - 2));
 	await Pireps.deleteMany({$or: [{manual: false}, {reportTime: {$lte: twoHours}}]}).exec();
 	console.log("Fetching data from VATISM.")
-	
 	const {data} = await axios.get('https://data.vatsim.net/v3/vatsim-data.json');
+
+	// PILOTS
+	
 	const dataPilots = [];
 	
-	let redisPilots = await redis.get('pilots')
-	redisPilots = (redisPilots.length) ? redisPilots.split('|') : [];
+	let redisPilots = await redis.get('pilots');
+	redisPilots = (redisPilots && redisPilots.length) ? redisPilots.split('|') : [];
 
 	for(const pilot of data.pilots) { // Get all pilots that depart/arrive in ARTCC's airspace
 		if(pilot.flight_plan !== null && (airports.includes(pilot.flight_plan.departure) || airports.includes(pilot.flight_plan.arrival))) {
@@ -83,6 +86,15 @@ const pollVatsim = async () => {
 
 	redis.set('pilots', dataPilots.join('|'));
 	redis.expire(`pilots`, 65);
+	
+	// CONTROLLERS
+	const dataControllers = [];
+	let redisControllers = await redis.get('controllers');
+	redisControllers = (redisControllers && redisControllers.length) ? redisControllers.split('|') : [];
+
+	const dataNeighbors = [];
+	let redisNeighbors = await redis.get('neighbors');
+	redisNeighbors = (redisNeighbors && redisNeighbors.length) ? redisNeighbors.split('|') : [];
 
 	for(const controller of data.controllers) { // Get all controllers that are online in ARTCC's airspace
 		if(atcPos.includes(controller.callsign.slice(0, 3)) && controller.callsign !== "PRC_FSS") {
@@ -95,6 +107,8 @@ const pollVatsim = async () => {
 				atis: controller.text_atis ? controller.text_atis.join(' - ') : '',
 				frequency: controller.frequency
 			})
+
+			dataControllers.push(controller.callsign);
 	
 			const session = await ControllerHours.findOne({
 				cid: controller.cid,
@@ -113,7 +127,24 @@ const pollVatsim = async () => {
 				await session.save();
 			}
 		}
+		const callsignParts = controller.callsign.split('_');
+		if(neighbors.includes(callsignParts[0]) && callsignParts[callsignParts.length - 1] === "CTR") { // neighboring center
+			dataNeighbors.push(callsignParts[0])
+		}
 	};
+
+	for(const atc of redisControllers) {
+		if(!dataControllers.includes(atc)) {
+			redis.publish('CONTROLLER:DELETE', atc)
+		}
+	}
+
+	redis.set('controllers', dataControllers.join('|'));
+	redis.expire(`controllers`, 65);
+	redis.set('neighbors', dataNeighbors.join('|'));
+	redis.expire(`neighbors`, 65);
+
+	// METARS
 
 	const airportsString = airports.join(","); // Get all METARs, add to database
 	const response = await axios.get(`https://metar.vatsim.net/${airportsString}`);
@@ -127,9 +158,11 @@ const pollVatsim = async () => {
 		redis.set(`METAR:${metar.slice(0,4)}`, metar);
 	}
 
+	// ATIS
+
 	const dataAtis = []
 	let redisAtis = await redis.get('atis')
-	redisAtis = (redisAtis.length) ? redisAtis.split('|') : [];
+	redisAtis = (redisAtis && redisAtis.length) ? redisAtis.split('|') : [];
 
 	for(const atis of data.atis) { // Find all ATIS connections within ARTCC's airspace
 		const airport = atis.callsign.slice(0,4)
@@ -148,8 +181,6 @@ const pollVatsim = async () => {
 
 	redis.set('atis', dataAtis.join('|'));
 	redis.expire(`atis`, 65);
-
-	redis.publish('METAR:UPDATE', 'UPDATE');
 }
 
 const getPireps = async () => {
@@ -208,7 +239,6 @@ const getPireps = async () => {
 (async () =>{
 	redis.set('airports', airports.join('|'));
 	await pollVatsim();
-	// await startKafka();
 	await getPireps();
 	schedule.scheduleJob('* * * * *', pollVatsim) // run every minute
 	schedule.scheduleJob('*/2 * * * *', getPireps) // run every 2 minutes
