@@ -328,14 +328,14 @@ const getPireps = async () => {
 			const windDir = pirep.wind_dir_degrees ? pirep.wind_dir_degrees._text : '';
 			const windSpd =  pirep.wind_speed_kt ? pirep.wind_speed_kt._text : '';
 			const wind = `${windDir}${pirep.wind_speed_kt ? '@' : ''}${windSpd}`;
-			const icing =  (pirep.icing_condition && pirep.icing_condition._attributes) ? (`${pirep.icing_condition._attributes.icing_intensity ? pirep.icing_condition._attributes.icing_intensity.slice(0,3) : ''} ${pirep.icing_condition._attributes.type ? pirep.icing_condition._attributes.type : ''} ${pirep.icing_condition._attributes.icing_base_ft_msl ? (('000' + Math.round(pirep.icing_condition._attributes.icing_base_ft_msl / 100)).toString()).slice(-3) : ''}-${pirep.icing_condition._attributes.icing_top_ft_msl ? (('000' + Math.round(pirep.icing_condition._attributes.icing_top_ft_msl / 100)).toString()).slice(-3) : ''}`).replace(/\s+/g,' ').trim() : '';
+			const icing =  (pirep.icing_condition && pirep.icing_condition._attributes) ? (`${pirep.icing_condition._attributes.icing_intensity ? pirep.icing_condition._attributes.icing_intensity.slice(0,3) : ''} ${pirep.icing_condition._attributes.type ? pirep.icing_condition._attributes.type : ''} ${pirep.icing_condition._attributes.icing_base_ft_msl ? (('000' + Math.round(pirep.icing_condition._attributes.icing_base_ft_msl / 100)).toString()).slice(-3) : ''}${pirep.icing_condition._attributes.icing_top_ft_msl ? '-' + (('000' + Math.round(pirep.icing_condition._attributes.icing_top_ft_msl / 100)).toString()).slice(-3) : ''}`).replace(/\s+/g,' ').trim() : '';
 			
 			await Pireps.create({
 				reportTime: pirep.observation_time._text,
 				location: pirep.raw_text._text.slice(0,3),
 				aircraft: pirep.aircraft_ref._text,
 				flightLevel: pirep.altitude_ft_msl ? (('000' + Math.round(pirep.altitude_ft_msl._text / 100)).toString()).slice(-3) : '',
-				skyCond: pirep.sky_condition ? `${pirep.sky_condition._attributes.sky_cover} ${(('000' + Math.round(pirep.sky_condition._attributes.cloud_base_ft_msl / 100)).toString()).slice(-3)}-${(('000' + Math.round(pirep.sky_condition._attributes.cloud_top_ft_msl / 100)).toString()).slice(-3)}` : '',
+				skyCond: pirep.sky_condition._attributes ? `${pirep.sky_condition._attributes.sky_cover ? pirep.sky_condition._attributes.sky_cover : ''} ${pirep.sky_condition._attributes.cloud_base_ft_msl ? (('000' + Math.round(pirep.sky_condition._attributes.cloud_base_ft_msl / 100)).toString()).slice(-3) : ''}${pirep.sky_condition._attributes.cloud_top_ft_msl ? '-' + (('000' + Math.round(pirep.sky_condition._attributes.cloud_top_ft_msl / 100)).toString()).slice(-3) : ''}` : '',
 				turbulence: (pirep.turbulence_condition && pirep.turbulence_condition._attributes) ? `${pirep.turbulence_condition._attributes.turbulence_intensity} ${pirep.turbulence_condition._attributes.turbulence_freq ? pirep.turbulence_condition._attributes.turbulence_freq : ''} ${pirep.turbulence_condition._attributes.turbulence_type ? pirep.turbulence_condition._attributes.turbulence_type : ''}`.replace(/\s+/g,' ').trim() : '',
 				icing: icing,
 				vis: pirep.visibility_statute_mi ? pirep.visibility_statute_mi._text : '',
@@ -352,14 +352,14 @@ const getPireps = async () => {
 				const windDir = pirep.wind_dir_degrees ? pirep.wind_dir_degrees._text : '';
 				const windSpd =  pirep.wind_speed_kt ? pirep.wind_speed_kt._text : '';
 				const wind = `${windDir}${pirep.wind_speed_kt ? '@' : ''}${windSpd}`;
-				const icing =  (pirep.icing_condition && pirep.icing_condition._attributes) ? (`${pirep.icing_condition._attributes.icing_intensity ? pirep.icing_condition._attributes.icing_intensity.slice(0,3) : ''} ${pirep.icing_condition._attributes.type ? pirep.icing_condition._attributes.type : ''} ${pirep.icing_condition._attributes.icing_base_ft_msl ? (('000' + Math.round(pirep.icing_condition._attributes.icing_base_ft_msl / 100)).toString()).slice(-3) : ''}-${pirep.icing_condition._attributes.icing_top_ft_msl ? (('000' + Math.round(pirep.icing_condition._attributes.icing_top_ft_msl / 100)).toString()).slice(-3) : ''}`).replace(/\s+/g,' ').trim() : '';
+				const icing =  (pirep.icing_condition && pirep.icing_condition._attributes) ? (`${pirep.icing_condition._attributes.icing_intensity ? pirep.icing_condition._attributes.icing_intensity.slice(0,3) : ''} ${pirep.icing_condition._attributes.type ? pirep.icing_condition._attributes.type : ''} ${pirep.icing_condition._attributes.icing_base_ft_msl ? (('000' + Math.round(pirep.icing_condition._attributes.icing_base_ft_msl / 100)).toString()).slice(-3) : ''}${pirep.icing_condition._attributes.icing_top_ft_msl ? '-' + (('000' + Math.round(pirep.icing_condition._attributes.icing_top_ft_msl / 100)).toString()).slice(-3) : ''}`).replace(/\s+/g,' ').trim() : '';
 				
 				await Pireps.create({
 					reportTime: pirep.observation_time._text,
 					location: pirep.raw_text._text.slice(0,3),
 					aircraft: pirep.aircraft_ref._text,
 					flightLevel: pirep.altitude_ft_msl ? (('000' + Math.round(pirep.altitude_ft_msl._text / 100)).toString()).slice(-3) : '',
-					skyCond: pirep.sky_condition._attributes ? `${pirep.sky_condition._attributes.sky_cover ? pirep.sky_condition._attributes.sky_cover : ''} ${pirep.sky_condition._attributes.cloud_base_ft_msl ? (('000' + Math.round(pirep.sky_condition._attributes.cloud_base_ft_msl / 100)).toString()).slice(-3) + '-' : ''}${pirep.sky_condition._attributes.cloud_top_ft_msl ? (('000' + Math.round(pirep.sky_condition._attributes.cloud_top_ft_msl / 100)).toString()).slice(-3) : ''}` : '',
+					skyCond: pirep.sky_condition._attributes ? `${pirep.sky_condition._attributes.sky_cover ? pirep.sky_condition._attributes.sky_cover : ''} ${pirep.sky_condition._attributes.cloud_base_ft_msl ? (('000' + Math.round(pirep.sky_condition._attributes.cloud_base_ft_msl / 100)).toString()).slice(-3) : ''}${pirep.sky_condition._attributes.cloud_top_ft_msl ? '-' + (('000' + Math.round(pirep.sky_condition._attributes.cloud_top_ft_msl / 100)).toString()).slice(-3) : ''}` : '',
 					turbulence: (pirep.turbulence_condition && pirep.turbulence_condition._attributes) ? `${pirep.turbulence_condition._attributes.turbulence_intensity} ${pirep.turbulence_condition._attributes.turbulence_freq ? pirep.turbulence_condition._attributes.turbulence_freq : ''} ${pirep.turbulence_condition._attributes.turbulence_type ? pirep.turbulence_condition._attributes.turbulence_type : ''}`.replace(/\s+/g,' ').trim() : '',
 					icing: icing,
 					vis: pirep.visibility_statute_mi ? pirep.visibility_statute_mi._text : '',
