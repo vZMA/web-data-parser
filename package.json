@@ -1,18 +1,22 @@
 {
   "name": "datafile-parser",
   "version": "1.0.0",
-  "description": "So, I decided to break this out into it's own microservice, because should we ever need to scale the website app out, I don't want multiple instances of that to compete with writing the datafile to the DB.",
+  "description": "Data file parser for the ZAB web stack that parses data from the various, used sources.",
   "main": "app.js",
   "type": "module",
-  "author": "Austin Robison",
+  "author": "Albuquerque ARTCC",
+  "contributors": [
+    "Austin Robison",
+    "Daan Janssen"
+  ],
   "license": "CC BY-NC-SA 4.0",
   "dependencies": {
-    "axios": "^0.21.0",
+    "axios": "^0.21.1",
     "dotenv": "^8.2.0",
     "ioredis": "^4.19.4",
     "kafkajs": "^1.15.0",
     "moment": "^2.27.0",
-    "mongoose": "^5.11.8",
+    "mongoose": "^5.11.10",
     "node-schedule": "^1.3.2",
     "point-in-polygon": "^1.0.1",
     "xml-js": "^1.6.11"
