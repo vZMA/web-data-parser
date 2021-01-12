@@ -2,8 +2,7 @@ import mongoose from 'mongoose';
 import axios from 'axios';
 import dotenv from 'dotenv'
 import schedule from 'node-schedule';
-import convert from 'xml-js';
-import inside from 'point-in-polygon'
+import inside from 'point-in-polygon';
 import moment from 'moment';
 import Redis from 'ioredis';
 import AtcOnline from './models/AtcOnline.js';
@@ -193,7 +192,7 @@ const pollVatsim = async () => {
 			);
 			redis.publish('PILOT:UPDATE', pilot.callsign);
 
-		} /* else if(pilot.flight_plan !== null && inside([pilot.latitude, pilot.longitude], airspace) == true) {
+		}  else if(pilot.flight_plan !== null && inside([pilot.latitude, pilot.longitude], airspace) == true) {
 			await PilotOnline.create({
 				cid: pilot.cid,
 				name: pilot.name,
@@ -211,7 +210,21 @@ const pollVatsim = async () => {
 				route: pilot.flight_plan.route,
 				remarks: pilot.flight_plan.remarks
 			});
-		} */
+			if(!dataPilots.includes(pilot.callsign)) {
+				dataPilots.push(pilot.callsign);
+				redis.hmset(`PILOT:${pilot.callsign}`,
+					'callsign', pilot.callsign,
+					'lat',  `${pilot.latitude}`,
+					'lng',  `${pilot.longitude}`,
+					'speed', `${pilot.groundspeed}`,
+					'heading', `${pilot.heading}`,
+					'altitude', `${pilot.altitude}`,
+					'cruise', `${pilot.flight_plan.altitude.includes("FL") ? (pilot.flight_plan.altitude.replace("FL", "") + '00') : pilot.flight_plan.altitude}`,
+					'destination', `${pilot.flight_plan.arrival}`,
+				);
+				redis.publish('PILOT:UPDATE', pilot.callsign);
+			}
+		}
 	};
 
 	for(const pilot of redisPilots) {
@@ -320,69 +333,34 @@ const pollVatsim = async () => {
 }
 
 const getPireps = async () => {
-	const pirepsXml = await axios.get('https://www.aviationweather.gov/adds/dataserver_current/httpparam?dataSource=aircraftreports&requestType=retrieve&format=xml&minLat=30&minLon=-113&maxLat=37&maxLon=-100&hoursBeforeNow=2');
-	const pirepsJson = JSON.parse(convert.xml2json(pirepsXml.data, {compact: true, spaces: 4}));
-	if(pirepsJson.response.data.AircraftReport && pirepsJson.response.data.AircraftReport.constructor !== Array) {
-		const pirep = pirepsJson.response.data.AircraftReport;
-		if(pirep.report_type && pirep.report_type._text === 'PIREP') {
-			const windDir = pirep.wind_dir_degrees ? pirep.wind_dir_degrees._text : '';
-			const windSpd =  pirep.wind_speed_kt ? pirep.wind_speed_kt._text : '';
-			const wind = `${windDir}${pirep.wind_speed_kt ? '@' : ''}${windSpd}`;
-			const icing =  (pirep.icing_condition && pirep.icing_condition._attributes) ? (`${pirep.icing_condition._attributes.icing_intensity ? pirep.icing_condition._attributes.icing_intensity.slice(0,3) : ''} ${pirep.icing_condition._attributes.type ? pirep.icing_condition._attributes.type : ''} ${pirep.icing_condition._attributes.icing_base_ft_msl ? (('000' + Math.round(pirep.icing_condition._attributes.icing_base_ft_msl / 100)).toString()).slice(-3) : ''}${pirep.icing_condition._attributes.icing_top_ft_msl ? '-' + (('000' + Math.round(pirep.icing_condition._attributes.icing_top_ft_msl / 100)).toString()).slice(-3) : ''}`).replace(/\s+/g,' ').trim() : '';
-			let turbulence = '';
+
+	const pirepsJson = await axios.get('https://www.aviationweather.gov/cgi-bin/json/AirepJSON.php');
+	const pireps = pirepsJson.data.features;
+	for(const pirep of pireps) {
+		if((pirep.properties.airepType === 'PIREP' || pirep.properties.airepType === 'Urgent PIREP') && inside(pirep.geometry.coordinates.reverse(), airspace) === true) { // Why do you put the coordinates the wrong way around, FAA? WHY?
 			
-			if(pirep.turbulence_condition && pirep.turbulence_condition._attributes) {
-				turbulence = `${pirep.turbulence_condition._attributes.turbulence_intensity} ${pirep.turbulence_condition._attributes.turbulence_freq ? pirep.turbulence_condition._attributes.turbulence_freq : ''} ${pirep.turbulence_condition._attributes.turbulence_type ? pirep.turbulence_condition._attributes.turbulence_type : ''} ${pirep.turbulence_condition._attributes.turbulence_base_ft_msl ? (('000' + Math.round(pirep.turbulence_condition._attributes.turbulence_base_ft_msl / 100)).toString()).slice(-3) : ''}${pirep.turbulence_condition._attributes.turbulence_top_ft_msl ? '-' + (('000' + Math.round(pirep.turbulence_condition._attributes.turbulence_top_ft_msl / 100)).toString()).slice(-3) : ''}`.replace(/\s+/g,' ').trim();
-			} else if(pirep.turbulence_condition && pirep.turbulence_condition[0]._attributes) {
-				turbulence =  `${pirep.turbulence_condition[0]._attributes.turbulence_intensity} ${pirep.turbulence_condition[0]._attributes.turbulence_freq ? pirep.turbulence_condition[0]._attributes.turbulence_freq : ''} ${pirep.turbulence_condition[0]._attributes.turbulence_type ? pirep.turbulence_condition[0]._attributes.turbulence_type : ''} ${pirep.turbulence_condition[0]._attributes.turbulence_base_ft_msl ? (('000' + Math.round(pirep.turbulence_condition[0]._attributes.turbulence_base_ft_msl / 100)).toString()).slice(-3) : ''}${pirep.turbulence_condition[0]._attributes.turbulence_top_ft_msl ? '-' + (('000' + Math.round(pirep.turbulence_condition[0]._attributes.turbulence_top_ft_msl / 100)).toString()).slice(-3) : ''}`.replace(/\s+/g,' ').trim();
-			}
-
-			await Pireps.create({
-				reportTime: pirep.observation_time._text,
-				location: pirep.raw_text._text.slice(0,3),
-				aircraft: pirep.aircraft_ref._text,
-				flightLevel: pirep.altitude_ft_msl ? (('000' + Math.round(pirep.altitude_ft_msl._text / 100)).toString()).slice(-3) : '',
-				skyCond: pirep.sky_condition ? `${pirep.sky_condition._attributes.sky_cover ? pirep.sky_condition._attributes.sky_cover : ''} ${pirep.sky_condition._attributes.cloud_base_ft_msl ? (('000' + Math.round(pirep.sky_condition._attributes.cloud_base_ft_msl / 100)).toString()).slice(-3) : ''}${pirep.sky_condition._attributes.cloud_top_ft_msl ? '-' + (('000' + Math.round(pirep.sky_condition._attributes.cloud_top_ft_msl / 100)).toString()).slice(-3) : ''}` : '',
-				turbulence: turbulence,
-				icing: icing,
-				vis: pirep.visibility_statute_mi ? pirep.visibility_statute_mi._text : '',
-				temp: pirep.temp_c ? pirep.temp_c._text : '',
-				wind: wind,
-				urgent: pirep.report_type._text === 'Urgent PIREP' ? true : false,
-				raw: pirep.raw_text._text,
-				manual: false
-			});
-		}
-	} else if(pirepsJson.response.data.AircraftReport && pirepsJson.response.data.AircraftReport) {
-		for(const pirep of pirepsJson.response.data.AircraftReport) {
-			if(pirep.report_type._text === 'PIREP') {
-				const windDir = pirep.wind_dir_degrees ? pirep.wind_dir_degrees._text : '';
-				const windSpd =  pirep.wind_speed_kt ? pirep.wind_speed_kt._text : '';
-				const wind = `${windDir}${pirep.wind_speed_kt ? '@' : ''}${windSpd}`;
-				const icing =  (pirep.icing_condition && pirep.icing_condition._attributes) ? (`${pirep.icing_condition._attributes.icing_intensity ? pirep.icing_condition._attributes.icing_intensity.slice(0,3) : ''} ${pirep.icing_condition._attributes.type ? pirep.icing_condition._attributes.type : ''} ${pirep.icing_condition._attributes.icing_base_ft_msl ? (('000' + Math.round(pirep.icing_condition._attributes.icing_base_ft_msl / 100)).toString()).slice(-3) : ''}${pirep.icing_condition._attributes.icing_top_ft_msl ? '-' + (('000' + Math.round(pirep.icing_condition._attributes.icing_top_ft_msl / 100)).toString()).slice(-3) : ''}`).replace(/\s+/g,' ').trim() : '';
-				let turbulence = '';
-				
-				if(pirep.turbulence_condition && pirep.turbulence_condition._attributes) {
-					turbulence = `${pirep.turbulence_condition._attributes.turbulence_intensity} ${pirep.turbulence_condition._attributes.turbulence_freq ? pirep.turbulence_condition._attributes.turbulence_freq : ''} ${pirep.turbulence_condition._attributes.turbulence_type ? pirep.turbulence_condition._attributes.turbulence_type : ''} ${pirep.turbulence_condition._attributes.turbulence_base_ft_msl ? (('000' + Math.round(pirep.turbulence_condition._attributes.turbulence_base_ft_msl / 100)).toString()).slice(-3) : ''}${pirep.turbulence_condition._attributes.turbulence_top_ft_msl ? '-' + (('000' + Math.round(pirep.turbulence_condition._attributes.turbulence_top_ft_msl / 100)).toString()).slice(-3) : ''}`.replace(/\s+/g,' ').trim();
-				} else if(pirep.turbulence_condition && pirep.turbulence_condition[0]._attributes) {
-					turbulence =  `${pirep.turbulence_condition[0]._attributes.turbulence_intensity} ${pirep.turbulence_condition[0]._attributes.turbulence_freq ? pirep.turbulence_condition[0]._attributes.turbulence_freq : ''} ${pirep.turbulence_condition[0]._attributes.turbulence_type ? pirep.turbulence_condition[0]._attributes.turbulence_type : ''} ${pirep.turbulence_condition[0]._attributes.turbulence_base_ft_msl ? (('000' + Math.round(pirep.turbulence_condition[0]._attributes.turbulence_base_ft_msl / 100)).toString()).slice(-3) : ''}${pirep.turbulence_condition[0]._attributes.turbulence_top_ft_msl ? '-' + (('000' + Math.round(pirep.turbulence_condition[0]._attributes.turbulence_top_ft_msl / 100)).toString()).slice(-3) : ''}`.replace(/\s+/g,' ').trim();
-				}
-
+			const wind = `${(pirep.properties.wdir ?  pirep.properties.wdir + '@' : '')}${pirep.properties.wspd || ''}`;
+			const icing =  ((pirep.properties.icgInt1 ? pirep.properties.icgInt1 + ' ' : '') + (pirep.properties.icgType1 ? pirep.properties.icgType1 : '')).replace(/\s+/g,' ').trim();
+			const skyCond = (pirep.properties.cloudCvg1 ? pirep.properties.cloudCvg1 + ' ' : '') + ( pirep.properties.Bas1 ? ('000' + pirep.properties.Bas1).slice(-3) : '') + (pirep.properties.Top1 ? '-' + ('000' + pirep.properties.Top1).slice(-3) : '');
+			const turbulence = (pirep.properties.tbInt1 ? pirep.properties.tbInt1 + ' ' : '') + (pirep.properties.tbFreq1 ? pirep.properties.tbFreq1 + ' ' : '') + (pirep.properties.tbType1 ? pirep.properties.tbType1 : '').replace(/\s+/g,' ').trim();
+			try {
 				await Pireps.create({
-					reportTime: pirep.observation_time._text,
-					location: pirep.raw_text._text.slice(0,3),
-					aircraft: pirep.aircraft_ref._text,
-					flightLevel: pirep.altitude_ft_msl ? (('000' + Math.round(pirep.altitude_ft_msl._text / 100)).toString()).slice(-3) : '',
-					skyCond: pirep.sky_condition && pirep.sky_condition._attributs ? `${pirep.sky_condition._attributes.sky_cover ? pirep.sky_condition._attributes.sky_cover : ''} ${pirep.sky_condition._attributes.cloud_base_ft_msl ? (('000' + Math.round(pirep.sky_condition._attributes.cloud_base_ft_msl / 100)).toString()).slice(-3) : ''}${pirep.sky_condition._attributes.cloud_top_ft_msl ? '-' + (('000' + Math.round(pirep.sky_condition._attributes.cloud_top_ft_msl / 100)).toString()).slice(-3) : ''}` : '',
+					reportTime: pirep.properties.obsTime || '',
+					location: pirep.properties.rawOb.slice(0,3) || '',
+					aircraft: pirep.properties.acType || '',
+					flightLevel: pirep.properties.fltlvl || '',
+					skyCond: skyCond,
 					turbulence: turbulence,
 					icing: icing,
 					vis: pirep.visibility_statute_mi ? pirep.visibility_statute_mi._text : '',
-					temp: pirep.temp_c ? pirep.temp_c._text : '',
+					temp: pirep.properties.temp || '',
 					wind: wind,
-					urgent: pirep.report_type._text === 'Urgent PIREP' ? true : false,
-					raw: pirep.raw_text._text,
+					urgent: pirep.properties.airepType === 'Urgent PIREP' ? true : false,
+					raw: pirep.properties.rawOb || '',
 					manual: false
 				});
+			} catch(e) {
+				console.log(e);
 			}
 		}
 	}
@@ -402,3 +380,4 @@ const getPireps = async () => {
 	
 
 //https://www.aviationweather.gov/adds/dataserver_current/httpparam?dataSource=aircraftreports&requestType=retrieve&format=xml&minLat=30&minLon=-113&maxLat=37&maxLon=-100&hoursBeforeNow=2
+//https://www.aviationweather.gov/cgi-bin/json/AirepJSON.php
