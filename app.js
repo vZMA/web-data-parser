@@ -338,8 +338,7 @@ const getPireps = async () => {
 	const pireps = pirepsJson.data.features;
 	for(const pirep of pireps) {
 		if((pirep.properties.airepType === 'PIREP' || pirep.properties.airepType === 'Urgent PIREP') && inside(pirep.geometry.coordinates.reverse(), airspace) === true) { // Why do you put the coordinates the wrong way around, FAA? WHY?
-			
-			const wind = `${(pirep.properties.wdir ?  pirep.properties.wdir + '@' : '')}${pirep.properties.wspd || ''}`;
+			const wind = `${(pirep.properties.wdir ?  pirep.properties.wdir : '')}${pirep.properties.wspd ? '@' + pirep.properties.wsdp : ''}`;
 			const icing =  ((pirep.properties.icgInt1 ? pirep.properties.icgInt1 + ' ' : '') + (pirep.properties.icgType1 ? pirep.properties.icgType1 : '')).replace(/\s+/g,' ').trim();
 			const skyCond = (pirep.properties.cloudCvg1 ? pirep.properties.cloudCvg1 + ' ' : '') + ( pirep.properties.Bas1 ? ('000' + pirep.properties.Bas1).slice(-3) : '') + (pirep.properties.Top1 ? '-' + ('000' + pirep.properties.Top1).slice(-3) : '');
 			const turbulence = (pirep.properties.tbInt1 ? pirep.properties.tbInt1 + ' ' : '') + (pirep.properties.tbFreq1 ? pirep.properties.tbFreq1 + ' ' : '') + (pirep.properties.tbType1 ? pirep.properties.tbType1 : '').replace(/\s+/g,' ').trim();
@@ -353,10 +352,10 @@ const getPireps = async () => {
 					turbulence: turbulence,
 					icing: icing,
 					vis: pirep.visibility_statute_mi ? pirep.visibility_statute_mi._text : '',
-					temp: pirep.properties.temp || '',
+					temp: pirep.properties.temp ? pirep.properties.temp : '',
 					wind: wind,
 					urgent: pirep.properties.airepType === 'Urgent PIREP' ? true : false,
-					raw: pirep.properties.rawOb || '',
+					raw: pirep.properties.rawOb,
 					manual: false
 				});
 			} catch(e) {
