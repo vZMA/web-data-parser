@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import axios from 'axios';
-import dotenv from 'dotenv'
+import dotenv from 'dotenv';
 import schedule from 'node-schedule';
 import inside from 'point-in-polygon';
 import moment from 'moment';
@@ -148,7 +148,7 @@ const pollVatsim = async () => {
 	let twoHours = new Date();
 	twoHours = new Date(twoHours.setHours(twoHours.getHours() - 2));
 	await Pireps.deleteMany({$or: [{manual: false}, {reportTime: {$lte: twoHours}}]}).exec();
-	console.log("Fetching data from VATSIM.")
+	console.log("Fetching data from VATSIM.");
 	const {data} = await axios.get('https://data.vatsim.net/v3/vatsim-data.json');
 
 	// PILOTS
@@ -159,7 +159,7 @@ const pollVatsim = async () => {
 	redisPilots = (redisPilots && redisPilots.length) ? redisPilots.split('|') : [];
 
 	for(const pilot of data.pilots) { // Get all pilots that depart/arrive in ARTCC's airspace
-		if(pilot.flight_plan !== null && (airports.includes(pilot.flight_plan.departure) || airports.includes(pilot.flight_plan.arrival))) {
+		if(pilot.flight_plan !== null && (airports.includes(pilot.flight_plan.departure) || airports.includes(pilot.flight_plan.arrival) || inside([pilot.latitude, pilot.longitude], airspace))) {
 			await PilotOnline.create({
 				cid: pilot.cid,
 				name: pilot.name,
@@ -182,54 +182,23 @@ const pollVatsim = async () => {
 			
 			redis.hmset(`PILOT:${pilot.callsign}`,
 				'callsign', pilot.callsign,
-				'lat',  `${pilot.latitude}`,
-				'lng',  `${pilot.longitude}`,
+				'lat', `${pilot.latitude}`,
+				'lng', `${pilot.longitude}`,
 				'speed', `${pilot.groundspeed}`,
 				'heading', `${pilot.heading}`,
 				'altitude', `${pilot.altitude}`,
 				'cruise', `${pilot.flight_plan.altitude.includes("FL") ? (pilot.flight_plan.altitude.replace("FL", "") + '00') : pilot.flight_plan.altitude}`,
 				'destination', `${pilot.flight_plan.arrival}`,
 			);
+			redis.expire(`PILOT:${pilot.callsign}`, 300);
 			redis.publish('PILOT:UPDATE', pilot.callsign);
 
-		}  else if(pilot.flight_plan !== null && inside([pilot.latitude, pilot.longitude], airspace) == true) {
-			await PilotOnline.create({
-				cid: pilot.cid,
-				name: pilot.name,
-				callsign: pilot.callsign,
-				aircraft: pilot.flight_plan.aircraft.substring(0, 8),
-				dep: pilot.flight_plan.departure,
-				dest: pilot.flight_plan.arrival,
-				code: Math.floor(Math.random() * (999 - 101) + 101),
-				lat: pilot.latitude,
-				lng: pilot.longitude,
-				altitude: pilot.altitude,
-				heading: pilot.heading,
-				speed: pilot.groundspeed,
-				planned_cruise: pilot.flight_plan.altitude.includes("FL") ? (pilot.flight_plan.altitude.replace("FL", "") + '00') : pilot.flight_plan.altitude, // If flight plan altitude is 'FL350' instead of '35000'
-				route: pilot.flight_plan.route,
-				remarks: pilot.flight_plan.remarks
-			});
-			if(!dataPilots.includes(pilot.callsign)) {
-				dataPilots.push(pilot.callsign);
-				redis.hmset(`PILOT:${pilot.callsign}`,
-					'callsign', pilot.callsign,
-					'lat',  `${pilot.latitude}`,
-					'lng',  `${pilot.longitude}`,
-					'speed', `${pilot.groundspeed}`,
-					'heading', `${pilot.heading}`,
-					'altitude', `${pilot.altitude}`,
-					'cruise', `${pilot.flight_plan.altitude.includes("FL") ? (pilot.flight_plan.altitude.replace("FL", "") + '00') : pilot.flight_plan.altitude}`,
-					'destination', `${pilot.flight_plan.arrival}`,
-				);
-				redis.publish('PILOT:UPDATE', pilot.callsign);
-			}
 		}
-	};
+	}
 
 	for(const pilot of redisPilots) {
 		if(!dataPilots.includes(pilot)) {
-			redis.publish('PILOT:DELETE', pilot)
+			redis.publish('PILOT:DELETE', pilot);
 		}
 	}
 
@@ -242,8 +211,6 @@ const pollVatsim = async () => {
 	redisControllers = (redisControllers && redisControllers.length) ? redisControllers.split('|') : [];
 
 	const dataNeighbors = [];
-	let redisNeighbors = await redis.get('neighbors');
-	redisNeighbors = (redisNeighbors && redisNeighbors.length) ? redisNeighbors.split('|') : [];
 
 	for(const controller of data.controllers) { // Get all controllers that are online in ARTCC's airspace
 		if(atcPos.includes(controller.callsign.slice(0, 3)) && controller.callsign !== "PRC_FSS") {
@@ -255,14 +222,14 @@ const pollVatsim = async () => {
 				timeStart: controller.logon_time,
 				atis: controller.text_atis ? controller.text_atis.join(' - ') : '',
 				frequency: controller.frequency
-			})
+			});
 
 			dataControllers.push(controller.callsign);
 	
 			const session = await ControllerHours.findOne({
 				cid: controller.cid,
 				timeStart: controller.logon_time
-			})
+			});
 	
 			if(!session) {
 				await ControllerHours.create({
@@ -270,7 +237,7 @@ const pollVatsim = async () => {
 					timeStart: controller.logon_time,
 					timeEnd: moment().utc(),
 					position: controller.callsign
-				})
+				});
 			} else {
 				session.timeEnd = moment().utc();
 				await session.save();
@@ -278,13 +245,13 @@ const pollVatsim = async () => {
 		}
 		const callsignParts = controller.callsign.split('_');
 		if(neighbors.includes(callsignParts[0]) && callsignParts[callsignParts.length - 1] === "CTR") { // neighboring center
-			dataNeighbors.push(callsignParts[0])
+			dataNeighbors.push(callsignParts[0]);
 		}
-	};
+	}
 
 	for(const atc of redisControllers) {
 		if(!dataControllers.includes(atc)) {
-			redis.publish('CONTROLLER:DELETE', atc)
+			redis.publish('CONTROLLER:DELETE', atc);
 		}
 	}
 
@@ -309,28 +276,28 @@ const pollVatsim = async () => {
 
 	// ATIS
 
-	const dataAtis = []
-	let redisAtis = await redis.get('atis')
+	const dataAtis = [];
+	let redisAtis = await redis.get('atis');
 	redisAtis = (redisAtis && redisAtis.length) ? redisAtis.split('|') : [];
 
 	for(const atis of data.atis) { // Find all ATIS connections within ARTCC's airspace
-		const airport = atis.callsign.slice(0,4)
+		const airport = atis.callsign.slice(0,4);
 		if(airports.includes(airport)) {
 			dataAtis.push(airport);
-			redis.expire(`ATIS:${airport}`, 65)
+			redis.expire(`ATIS:${airport}`, 65);
 		}
 	}
 
 	for(const atis of redisAtis) {
 		if(!dataAtis.includes(atis)) {
-			redis.publish('ATIS:DELETE', atis)
+			redis.publish('ATIS:DELETE', atis);
 			redis.del(`ATIS:${atis}`);
 		}
 	}
 
 	redis.set('atis', dataAtis.join('|'));
 	redis.expire(`atis`, 65);
-}
+};
 
 const getPireps = async () => {
 
@@ -338,8 +305,8 @@ const getPireps = async () => {
 	const pireps = pirepsJson.data.features;
 	for(const pirep of pireps) {
 		if((pirep.properties.airepType === 'PIREP' || pirep.properties.airepType === 'Urgent PIREP') && inside(pirep.geometry.coordinates.reverse(), airspace) === true) { // Why do you put the coordinates the wrong way around, FAA? WHY?
-			const wind = `${(pirep.properties.wdir ?  pirep.properties.wdir : '')}${pirep.properties.wspd ? '@' + pirep.properties.wsdp : ''}`;
-			const icing =  ((pirep.properties.icgInt1 ? pirep.properties.icgInt1 + ' ' : '') + (pirep.properties.icgType1 ? pirep.properties.icgType1 : '')).replace(/\s+/g,' ').trim();
+			const wind = `${(pirep.properties.wdir ? pirep.properties.wdir : '')}${pirep.properties.wspd ? '@' + pirep.properties.wsdp : ''}`;
+			const icing = ((pirep.properties.icgInt1 ? pirep.properties.icgInt1 + ' ' : '') + (pirep.properties.icgType1 ? pirep.properties.icgType1 : '')).replace(/\s+/g,' ').trim();
 			const skyCond = (pirep.properties.cloudCvg1 ? pirep.properties.cloudCvg1 + ' ' : '') + ( pirep.properties.Bas1 ? ('000' + pirep.properties.Bas1).slice(-3) : '') + (pirep.properties.Top1 ? '-' + ('000' + pirep.properties.Top1).slice(-3) : '');
 			const turbulence = (pirep.properties.tbInt1 ? pirep.properties.tbInt1 + ' ' : '') + (pirep.properties.tbFreq1 ? pirep.properties.tbFreq1 + ' ' : '') + (pirep.properties.tbType1 ? pirep.properties.tbType1 : '').replace(/\s+/g,' ').trim();
 			try {
@@ -363,15 +330,15 @@ const getPireps = async () => {
 			}
 		}
 	}
-}
+};
 
 
 (async () =>{
 	await redis.set('airports', airports.join('|'));
 	await pollVatsim();
 	await getPireps();
-	schedule.scheduleJob('* * * * *', pollVatsim) // run every minute
-	schedule.scheduleJob('*/2 * * * *', getPireps) // run every 2 minutes
+	schedule.scheduleJob('* * * * *', pollVatsim); // run every minute
+	schedule.scheduleJob('*/2 * * * *', getPireps); // run every 2 minutes
 })();
 
 	
