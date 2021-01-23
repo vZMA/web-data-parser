@@ -6,7 +6,6 @@ import inside from 'point-in-polygon';
 import moment from 'moment';
 import Redis from 'ioredis';
 import AtcOnline from './models/AtcOnline.js';
-import AtisOnline from './models/AtisOnline.js';
 import PilotOnline from './models/PilotOnline.js';
 import Pireps from './models/Pireps.js';
 import ControllerHours from './models/ControllerHours.js';
@@ -144,7 +143,6 @@ db.once('open', () => console.log('Successfully connected to MongoDB'));
 const pollVatsim = async () => {
 	await AtcOnline.deleteMany({}).exec();
 	await PilotOnline.deleteMany({}).exec();
-	await AtisOnline.deleteMany({}).exec();
 	let twoHours = new Date();
 	twoHours = new Date(twoHours.setHours(twoHours.getHours() - 2));
 	await Pireps.deleteMany({$or: [{manual: false}, {reportTime: {$lte: twoHours}}]}).exec();
@@ -267,10 +265,6 @@ const pollVatsim = async () => {
 	const metars = response.data.split("\n");
 
 	for(const metar of metars) {
-		await AtisOnline.create({
-			airport: metar.slice(0,4),
-			metar: metar
-		});
 		redis.set(`METAR:${metar.slice(0,4)}`, metar);
 	}
 
