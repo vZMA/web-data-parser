@@ -3,7 +3,6 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import schedule from 'node-schedule';
 import inside from 'point-in-polygon';
-import moment from 'moment';
 import Redis from 'ioredis';
 import AtcOnline from './models/AtcOnline.js';
 import PilotOnline from './models/PilotOnline.js';
@@ -233,11 +232,11 @@ const pollVatsim = async () => {
 				await ControllerHours.create({
 					cid: controller.cid,
 					timeStart: controller.logon_time,
-					timeEnd: moment().utc(),
+					timeEnd: new Date(new Date().toUTCString()),
 					position: controller.callsign
 				});
 			} else {
-				session.timeEnd = moment().utc();
+				session.timeEnd = new Date(new Date().toUTCString());
 				await session.save();
 			}
 		}
@@ -299,7 +298,7 @@ const getPireps = async () => {
 	const pireps = pirepsJson.data.features;
 	for(const pirep of pireps) {
 		if((pirep.properties.airepType === 'PIREP' || pirep.properties.airepType === 'Urgent PIREP') && inside(pirep.geometry.coordinates.reverse(), airspace) === true) { // Why do you put the coordinates the wrong way around, FAA? WHY?
-			const wind = `${(pirep.properties.wdir ? pirep.properties.wdir : '')}${pirep.properties.wspd ? '@' + pirep.properties.wsdp : ''}`;
+			const wind = `${(pirep.properties.wdir ? pirep.properties.wdir : '')}${pirep.properties.wspd ? '@' + pirep.properties.wspd : ''}`;
 			const icing = ((pirep.properties.icgInt1 ? pirep.properties.icgInt1 + ' ' : '') + (pirep.properties.icgType1 ? pirep.properties.icgType1 : '')).replace(/\s+/g,' ').trim();
 			const skyCond = (pirep.properties.cloudCvg1 ? pirep.properties.cloudCvg1 + ' ' : '') + ( pirep.properties.Bas1 ? ('000' + pirep.properties.Bas1).slice(-3) : '') + (pirep.properties.Top1 ? '-' + ('000' + pirep.properties.Top1).slice(-3) : '');
 			const turbulence = (pirep.properties.tbInt1 ? pirep.properties.tbInt1 + ' ' : '') + (pirep.properties.tbFreq1 ? pirep.properties.tbFreq1 + ' ' : '') + (pirep.properties.tbType1 ? pirep.properties.tbType1 : '').replace(/\s+/g,' ').trim();
