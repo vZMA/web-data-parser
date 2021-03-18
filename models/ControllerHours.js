@@ -1,12 +1,12 @@
 import m from 'mongoose';
 
 const controllerHoursSchema = new m.Schema({
-    cid: Number,
-    timeStart: Date,
-    timeEnd: Date,
-    pos: String
+	cid: Number,
+	timeStart: Date,
+	timeEnd: Date,
+	position: String
 }, {
-    collection: "controllerHours"
-})
+	collection: "controllerHours"
+});
 
 export default m.model('ControllerHours', controllerHoursSchema);
