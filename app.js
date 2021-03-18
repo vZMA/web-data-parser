@@ -330,7 +330,7 @@ const getPireps = async () => {
 	await redis.set('airports', airports.join('|'));
 	await pollVatsim();
 	await getPireps();
-	schedule.scheduleJob('* * * * *', pollVatsim); // run every minute
+	schedule.scheduleJob('*/15 * * * * *', pollVatsim); // run every 15 seconds
 	schedule.scheduleJob('*/2 * * * *', getPireps); // run every 2 minutes
 })();
 
