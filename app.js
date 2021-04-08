@@ -142,9 +142,7 @@ db.once('open', () => console.log('Successfully connected to MongoDB'));
 const pollVatsim = async () => {
 	await AtcOnline.deleteMany({}).exec();
 	await PilotOnline.deleteMany({}).exec();
-	let twoHours = new Date();
-	twoHours = new Date(twoHours.setHours(twoHours.getHours() - 2));
-	await Pireps.deleteMany({$or: [{manual: false}, {reportTime: {$lte: twoHours}}]}).exec();
+	
 	console.log("Fetching data from VATSIM.");
 	const {data} = await axios.get('https://data.vatsim.net/v3/vatsim-data.json');
 
@@ -293,6 +291,11 @@ const pollVatsim = async () => {
 };
 
 const getPireps = async () => {
+	console.log('Fetching PIREPs.');
+	let twoHours = new Date();
+	twoHours = new Date(twoHours.setHours(twoHours.getHours() - 2));
+
+	await Pireps.deleteMany({$or: [{manual: false}, {reportTime: {$lte: twoHours}}]}).exec();
 
 	const pirepsJson = await axios.get('https://www.aviationweather.gov/cgi-bin/json/AirepJSON.php');
 	const pireps = pirepsJson.data.features;
