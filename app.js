@@ -159,7 +159,7 @@ const pollVatsim = async () => {
 				cid: pilot.cid,
 				name: pilot.name,
 				callsign: pilot.callsign,
-				aircraft: pilot.flight_plan.aircraft.substring(0, 8),
+				aircraft: pilot.flight_plan.aircraft_faa,
 				dep: pilot.flight_plan.departure,
 				dest: pilot.flight_plan.arrival,
 				code: Math.floor(Math.random() * (999 - 101) + 101),

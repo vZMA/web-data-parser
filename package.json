@@ -13,12 +13,12 @@
   "dependencies": {
     "axios": "^0.21.1",
     "dotenv": "^8.2.0",
-    "ioredis": "^4.25.0",
+    "ioredis": "^4.26.0",
     "mongoose": "^5.12.3",
     "node-schedule": "^2.0.0",
     "point-in-polygon": "^1.1.0"
   },
   "devDependencies": {
-    "eslint": "^7.23.0"
+    "eslint": "^7.24.0"
   }
 }
