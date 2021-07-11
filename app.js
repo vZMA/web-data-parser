@@ -4,6 +4,8 @@ import dotenv from 'dotenv';
 import schedule from 'node-schedule';
 import inside from 'point-in-polygon';
 import Redis from 'ioredis';
+
+
 import AtcOnline from './models/AtcOnline.js';
 import PilotOnline from './models/PilotOnline.js';
 import Pireps from './models/Pireps.js';
@@ -14,6 +16,16 @@ mongoose.set('useFindAndModify', false);
 dotenv.config();
 
 const redis = new Redis(process.env.REDIS_URI);
+
+redis.on('error', err => { throw new Error(`Failed to connect to Redis: ${err}`); });
+redis.on('connect', () => console.log('Successfully connected to Redis'));
+
+const zabApi = axios.create({
+	baseURL: process.env.ZAB_API_URL,
+	headers: {
+		'Authorization': `Bearer ${process.env.ZAB_API_KEY}`
+	}
+});
 
 const atcPos = ["PHX", "ABQ", "TUS", "AMA", "ROW", "ELP", "SDL", "CHD", "FFZ", "IWA", "DVT", "GEU", "GYR", "LUF", "RYN", "DMA", "FLG", "PRC", "AEG", "BIF", "HMN", "SAF", "FHU"];
 const airports = ["KPHX", "KABQ", "KTUS", "KAMA", "KROW", "KELP", "KSDL", "KCHD", "KFFZ", "KIWA", "KDVT", "KGEU", "KGYR", "KLUF", "KRYN", "KDMA", "KFLG", "KPRC", "KSEZ", "KAEG", "KBIF", "KHMN", "KSAF", "KFHU"];
@@ -233,6 +245,7 @@ const pollVatsim = async () => {
 					timeEnd: new Date(new Date().toUTCString()),
 					position: controller.callsign
 				});
+				await zabApi.post(`/stats/fifty/${controller.cid}`);
 			} else {
 				session.timeEnd = new Date(new Date().toUTCString());
 				await session.save();
