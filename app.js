@@ -18,6 +18,7 @@ const redis = new Redis(process.env.REDIS_URI);
 const atcPos = ["PHX", "ABQ", "TUS", "AMA", "ROW", "ELP", "SDL", "CHD", "FFZ", "IWA", "DVT", "GEU", "GYR", "LUF", "RYN", "DMA", "FLG", "PRC", "AEG", "BIF", "HMN", "SAF", "FHU"];
 const airports = ["KPHX", "KABQ", "KTUS", "KAMA", "KROW", "KELP", "KSDL", "KCHD", "KFFZ", "KIWA", "KDVT", "KGEU", "KGYR", "KLUF", "KRYN", "KDMA", "KFLG", "KPRC", "KSEZ", "KAEG", "KBIF", "KHMN", "KSAF", "KFHU"];
 const neighbors = ['LAX', 'DEN', 'KC', 'FTW', 'HOU', 'MMTY', 'MMTZ'];
+
 const airspace = [
 	[37.041667, -102.183333],
 	[36.5, -101.75],
@@ -133,7 +134,6 @@ const airspace = [
 	[37.041667, -102.183333],
 ];
 
-
 mongoose.set('toJSON', {virtuals: true});
 mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useCreateIndex: true, useUnifiedTopology: true });
 const db = mongoose.connection;
@@ -208,7 +208,7 @@ const pollVatsim = async () => {
 	const dataNeighbors = [];
 
 	for(const controller of data.controllers) { // Get all controllers that are online in ARTCC's airspace
-		if(atcPos.includes(controller.callsign.slice(0, 3)) && controller.callsign !== "PRC_FSS" && controller.rating > 1) {
+		if(atcPos.includes(controller.callsign.slice(0, 3)) && controller.callsign !== "PRC_FSS" && controller.callsign.slice(-3) !== "OBS") {
 			await AtcOnline.create({
 				cid: controller.cid,
 				name: controller.name,
