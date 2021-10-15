@@ -11,8 +11,6 @@ import PilotOnline from './models/PilotOnline.js';
 import Pireps from './models/Pireps.js';
 import ControllerHours from './models/ControllerHours.js';
 
-mongoose.set('useFindAndModify', false);
-
 dotenv.config();
 
 const redis = new Redis(process.env.REDIS_URI);
@@ -147,7 +145,7 @@ const airspace = [
 ];
 
 mongoose.set('toJSON', {virtuals: true});
-mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useCreateIndex: true, useUnifiedTopology: true });
+mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 const db = mongoose.connection;
 db.once('open', () => console.log('Successfully connected to MongoDB'));
 
