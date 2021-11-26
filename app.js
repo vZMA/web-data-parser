@@ -218,7 +218,7 @@ const pollVatsim = async () => {
 	const dataNeighbors = [];
 
 	for(const controller of data.controllers) { // Get all controllers that are online in ARTCC's airspace
-		if(atcPos.includes(controller.callsign.slice(0, 3)) && controller.callsign !== "PRC_FSS" && controller.callsign.slice(-3) !== "OBS") {
+		if(atcPos.includes(controller.callsign.slice(0, 3)) && controller.callsign !== "PRC_FSS" && controller.facility !== 0) {
 			await AtcOnline.create({
 				cid: controller.cid,
 				name: controller.name,

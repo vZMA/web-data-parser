@@ -11,14 +11,14 @@
   ],
   "license": "CC BY-NC-SA 4.0",
   "dependencies": {
-    "axios": "^0.23.0",
+    "axios": "^0.24.0",
     "dotenv": "^10.0.0",
-    "ioredis": "^4.28.0",
-    "mongoose": "^6.0.10",
+    "ioredis": "^4.28.1",
+    "mongoose": "^6.0.13",
     "node-schedule": "^2.0.0",
     "point-in-polygon": "^1.1.0"
   },
   "devDependencies": {
-    "eslint": "^7.32.0"
+    "eslint": "^8.3.0"
   }
 }
