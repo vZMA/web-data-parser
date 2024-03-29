@@ -42,8 +42,7 @@ const pollVatsim = async () => {
 	
 	console.log("Fetching data from VATSIM.");
 	const {vatsimdata} = await axios.get('https://data.vatsim.net/v3/vatsim-data.json');
-	const data = vatsimdata.data.toString('utf-8');
-
+	const data = vatsimdata.toString('utf-8');
 	// PILOTS
 	
 	const dataPilots = [];
