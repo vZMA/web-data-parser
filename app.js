@@ -41,7 +41,8 @@ const pollVatsim = async () => {
 	await PilotOnline.deleteMany({}).exec();
 	
 	console.log("Fetching data from VATSIM.");
-	const {data} = await axios.get('https://data.vatsim.net/v3/vatsim-data.json');
+	const {vatsimdata} = await axios.get('https://data.vatsim.net/v3/vatsim-data.json');
+	const data = vatsimdata.data.toString('utf-8');
 
 	// PILOTS
 	
